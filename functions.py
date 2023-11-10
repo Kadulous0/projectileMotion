@@ -1,9 +1,10 @@
-import math as m
 import matplotlib.pyplot as plt
+import pandas as pd
 import numpy as np
 import scipy as sp
-import csv
 import time as t
+import csv
+
 from parameters import *
 
 ###########################################################################
@@ -40,7 +41,7 @@ def bodyForceGrav(dist): # RETURNS FORCE IN NEWTONS
     if dist >= CONST_R:
         return CONST_G*((CONST_MB*CONST_M)/dist**2)
     else:
-        return (4/3)*CONST_PI*CONST_G*((CONST_MB*CONST_M)/((4/3)*CONST_PI*CONST_R**3))*dist
+        return (4/3)*m.pi*CONST_G*((CONST_MB*CONST_M)/((4/3)*m.pi*CONST_R**3))*dist
     
 def bodyForceGravComponent(distAbsolute, distComponent):
     return CONST_G*((CONST_MB*CONST_M)/distAbsolute**3)*distComponent
@@ -155,6 +156,45 @@ def calcInitOrbVel(ap, pe):
 def absolute(x, y):
     return np.sqrt((x**2)+(y**2))
 
+def readData(filename, column):
+    dataFrame = pd.read_csv(filename)
+    return dataFrame[column]
+
+def drawPlanet(radius, res, color, ax):
+    planetX=[]
+    planetY=[]
+    rad = np.linspace(0, 2*m.pi, res)
+    for i in rad:
+        planetX.append(m.cos(i)*radius)
+        planetY.append(m.sin(i)*radius)
+    ax.plot(planetX, planetY, color=color) # earth
+
+def drawTrajectoryPlot(fileName, res, colorTraj, colorBody):
+    x=readData("trajectory.csv", "Position X").array
+    y=readData("trajectory.csv", "Position Y").array
+
+    fig, ax = plt.subplots(figsize=(res/100,res/100))
+    drawPlanet(CONST_R, 4096, colorBody, ax)
+    ax.plot(x, y, color=colorTraj)
+
+    ax.set_xlim([-1.05*(CONST_R+CONST_AP), 1.05*(CONST_R+CONST_AP)])
+    ax.set_ylim([-1.05*(CONST_R+CONST_AP), 1.05*(CONST_R+CONST_AP)])
+    ax.set_box_aspect(1)
+    fig.tight_layout()
+    plt.savefig(fileName)
+
+def drawPlot(fileName, label, units, color):
+    time = readData("trajectory.csv", "Time").array
+    data = readData("trajectory.csv", label).array
+
+    fig, ax = plt.subplots()
+    ax.plot(time, data, color=color)
+    ax.set_ylabel(label + " (" + units + ")")
+    ax.set_xlabel("Time (seconds)")
+    ax.set_title("Time vs. " + label)
+    fig.tight_layout()
+    plt.savefig(fileName)
+
 class Projectile():
     def __init__(self, ap, pe):
         self.pos = [0, ap + CONST_R]
@@ -162,7 +202,7 @@ class Projectile():
         self.acc = [0,(-1*bodyForceGrav(ap + CONST_R))/CONST_M]
         self.drag = [drag(self.vel[0], absolute(self.vel[0], self.vel[1]),absolute(self.pos[0], self.pos[1])), 0]
         open("trajectory.csv", "w").close()
-        self.write(["Time", "Positon X", "Position Y", "Absolute Altitude", "Velocity X", "Velocity Y", "Absolute Velocity", "Acceleration X", "Acceleration Y", "Absolute Acceleration", "Absolute Drag Force"])
+        self.write(["Time", "Position X", "Position Y", "Absolute Altitude", "Velocity X", "Velocity Y", "Absolute Velocity", "Acceleration X", "Acceleration Y", "Absolute Acceleration", "Absolute Drag Force"])
     
     def write(self, x):
         csv.writer(open("trajectory.csv", "a", newline="")).writerow(x)
@@ -182,7 +222,7 @@ class Simulation():
 
             # record position
             line = []
-            line.extend((self.time, self.projectile.pos[0], self.projectile.pos[1], absolute(self.projectile.pos[0], self.projectile.pos[1]), self.projectile.vel[0], self.projectile.vel[1], absolute(self.projectile.vel[0], self.projectile.vel[1]), self.projectile.acc[0], self.projectile.acc[1], absolute(self.projectile.acc[0], self.projectile.acc[1]), absolute(self.projectile.drag[0], self.projectile.drag[1])))
+            line.extend((self.time, self.projectile.pos[0], self.projectile.pos[1], absolute(self.projectile.pos[0], self.projectile.pos[1])-CONST_R, self.projectile.vel[0], self.projectile.vel[1], absolute(self.projectile.vel[0], self.projectile.vel[1]), self.projectile.acc[0], self.projectile.acc[1], absolute(self.projectile.acc[0], self.projectile.acc[1]), absolute(self.projectile.drag[0], self.projectile.drag[1])))
             self.projectile.write(line)
         
             # update position
