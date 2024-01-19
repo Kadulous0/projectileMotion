@@ -1,17 +1,33 @@
+# ========================================
+# FileName: functions.py
+# Author: Kade Kirsch
+# Email: kade2kirsch@gmail.com
+# GitHub: https://github.com/Kadulous0
+#
+# Description: contains vital functions to
+# run a orbital decay/reentry simulation.
+# ========================================
+
+# disclaimer: in no way is this code effecient
+
 import matplotlib.pyplot as plt
+import matplotlib.colors as col
 import pandas as pd
 import numpy as np
 import scipy as sp
 import time as t
+import datetime as dt
 import csv
 
 from parameters import *
 
-###########################################################################
+# ========================================
 # Found Online Functions
-###########################################################################
-
+# ========================================
+#
+# found at:
 # https://stackoverflow.com/questions/3173320/text-progress-bar-in-terminal-with-block-characters
+#
 # Print iterations progress
 def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
     """
@@ -34,17 +50,19 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
     if iteration == total: 
         print()
 
-###########################################################################
-
+# ========================================
+# End of Found Online Functions
+# ========================================
+        
 # My Own Functions
 def bodyForceGrav(dist): # RETURNS FORCE IN NEWTONS
     if dist >= CONST_R:
         return CONST_G*((CONST_MB*CONST_M)/dist**2)
     else:
         return (4/3)*m.pi*CONST_G*((CONST_MB*CONST_M)/((4/3)*m.pi*CONST_R**3))*dist
-    
-def bodyForceGravComponent(distAbsolute, distComponent):
-    return CONST_G*((CONST_MB*CONST_M)/distAbsolute**3)*distComponent
+
+def geopotentialToMetric(alt_potential): # converts geopotential altitude to geometric altitude
+    return (CONST_R*alt_potential)/(CONST_R-alt_potential)
 
 def coeffecientDragCurve(mach): # Mach to CD based on "STABILITY CHARACTERISTICS OF THE APOLLO COMMAND MODULE" (NASA TN D-3890), Figures 6 & 7 (90 degree AoA)
     if mach >= 0 and mach < 0.2:
@@ -75,6 +93,7 @@ def coeffecientDragCurve(mach): # Mach to CD based on "STABILITY CHARACTERISTICS
         return 0
 
 def bodyTCurve(alt): # in Kelvin, 1976 US Standard Atmosphere 
+    alt = geopotentialToMetric(alt)
     if alt >= 0 and alt < 11000:
         return ((216.65-288.15)/11000)*(alt-11000)+216.65
     elif alt >= 11000 and alt < 20000:
@@ -103,6 +122,7 @@ def bodyTCurve(alt): # in Kelvin, 1976 US Standard Atmosphere
         return 288
 
 def molMass(alt): # Molecular Mass of the Air at an altitude, https://www.ngdc.noaa.gov/stp/space-weather/online-publications/miscellaneous/us-standard-atmosphere-1976/us-standard-atmosphere_st76-1562_noaa.pdf (page 15/figure 6)
+    alt = geopotentialToMetric(alt)
     if alt < 85000:
         return 0.0289645
     elif alt >= 85000 and alt < 100000:
@@ -147,11 +167,11 @@ def speedOfSound(alt):
 def machNumber(vel, alt):
     return vel/speedOfSound(alt)
 
-def drag(vel, AbsVel, AbsAlt):
-    return (0.5)*density(AbsAlt-CONST_R)*(vel*vel)*coeffecientDragCurve(machNumber(AbsVel, AbsAlt-CONST_R))*CONST_A
+def drag(AbsVel, AbsAlt):
+    return (0.5)*density(AbsAlt-CONST_R)*(AbsVel*AbsVel)*coeffecientDragCurve(machNumber(AbsVel, AbsAlt-CONST_R))*CONST_A
 
 def calcInitOrbVel(ap, pe):
-        return m.sqrt(CONST_G*CONST_MB*((2/(ap+CONST_R))-(1/(((2*CONST_R) + ap + pe)/2))))
+    return m.sqrt(CONST_MU*((2/(ap+CONST_R))-(1/(((2*CONST_R) + ap + pe)/2))))
 
 def absolute(x, y):
     return np.sqrt((x**2)+(y**2))
@@ -167,20 +187,24 @@ def drawPlanet(radius, res, color, ax):
     for i in rad:
         planetX.append(m.cos(i)*radius)
         planetY.append(m.sin(i)*radius)
-    ax.plot(planetX, planetY, color=color) # earth
+    ax.plot(planetX, planetY, color="k")
+    ax.fill(planetX, planetY, color=col.to_rgba(color))
 
-def drawTrajectoryPlot(fileName, res, colorTraj, colorBody):
+def drawTrajectoryPlot(fileName, res, colorTraj, colorBody, margin):
     x=readData("trajectory.csv", "Position X").array
     y=readData("trajectory.csv", "Position Y").array
+    c=readData("trajectory.csv", "Absolute Velocity").array
 
     fig, ax = plt.subplots(figsize=(res/100,res/100))
     drawPlanet(CONST_R, 4096, colorBody, ax)
-    ax.plot(x, y, color=colorTraj)
+    im = ax.scatter(x, y, c=c, cmap=colorTraj, s=0.125, vmin=0)
 
-    ax.set_xlim([-1.05*(CONST_R+CONST_AP), 1.05*(CONST_R+CONST_AP)])
-    ax.set_ylim([-1.05*(CONST_R+CONST_AP), 1.05*(CONST_R+CONST_AP)])
+    ax.set_xlim([-1.05*(CONST_R+margin), 1.05*(CONST_R+margin)])
+    ax.set_ylim([-1.05*(CONST_R+margin), 1.05*(CONST_R+margin)])
     ax.set_box_aspect(1)
+    ax.set_facecolor('#141414')
     fig.tight_layout()
+    #plt.colorbar(im, ax=ax, label="Velocity (m/s)", aspect=40, shrink=0.853, pad=0.01)
     plt.savefig(fileName)
 
 def drawPlot(fileName, label, units, color):
@@ -195,71 +219,77 @@ def drawPlot(fileName, label, units, color):
     fig.tight_layout()
     plt.savefig(fileName)
 
+def estTime(startTime, currentStep, maxSteps):
+    currentTime = t.perf_counter()
+    elapsedTime = currentTime - startTime
+    if currentStep==0:
+        currentStep = 1
+    estRemaining = (elapsedTime * (maxSteps / currentStep)) - elapsedTime
+    print("ETA:", dt.timedelta(seconds=int(estRemaining)), end="\r")
+
 class Projectile():
     def __init__(self, ap, pe):
-        self.pos = [0, ap + CONST_R]
+        self.mass = CONST_M
+        self.drag = [0, 0]
+        self.grav = [0, bodyForceGrav(ap+CONST_R)]
+        self.acc = [0, 0]
         self.vel = [calcInitOrbVel(ap, pe), 0]
-        self.acc = [0,(-1*bodyForceGrav(ap + CONST_R))/CONST_M]
-        self.drag = [drag(self.vel[0], absolute(self.vel[0], self.vel[1]),absolute(self.pos[0], self.pos[1])), 0]
+        self.pos = [0, ap+CONST_R]
         open("trajectory.csv", "w").close()
-        self.write(["Time", "Position X", "Position Y", "Absolute Altitude", "Velocity X", "Velocity Y", "Absolute Velocity", "Acceleration X", "Acceleration Y", "Absolute Acceleration", "Absolute Drag Force"])
+        self.write(["Time", "Position X", "Position Y", "Absolute Altitude", "Absolute Velocity", "Absolute Acceleration", "Absolute Drag Force"])
     
     def write(self, x):
         csv.writer(open("trajectory.csv", "a", newline="")).writerow(x)
 
 
 class Simulation():
-    def __init__(self, projectile, dT, tLMax):
+    def __init__(self, projectile, dT, tLMax, isDrag):
         self.projectile = projectile
         self.time = 0
         self.dT = dT
         self.tLMax = tLMax
+        self.dragEnabled = isDrag
 
     def run(self):
-        start = t.perf_counter()
+        start = t.perf_counter() # performace calculation start
         while self.time <= self.tLMax:
-            printProgressBar(self.time, self.tLMax, prefix = "Simulation:", length = 50)
+            printProgressBar(self.time, self.tLMax, prefix = "Simulation:", length = 50, printEnd=" ")
+            estTime(start, self.time, self.tLMax)
+
+            if self.dragEnabled:
+                # find drag force (newtons)
+                theta = m.atan2(self.projectile.vel[1],self.projectile.vel[0])
+                self.projectile.drag[0] = -drag(absolute(self.projectile.vel[0], self.projectile.vel[1]), absolute(self.projectile.pos[0], self.projectile.pos[1]))*m.cos(theta)
+                self.projectile.drag[1] = -drag(absolute(self.projectile.vel[0], self.projectile.vel[1]), absolute(self.projectile.pos[0], self.projectile.pos[1]))*m.sin(theta)
+
+            # find gravity force (newtons)
+            theta = m.atan2(self.projectile.pos[1],self.projectile.pos[0])
+            self.projectile.grav[0] = -bodyForceGrav(absolute(self.projectile.pos[0], self.projectile.pos[1]))*m.cos(theta)
+            self.projectile.grav[1] = -bodyForceGrav(absolute(self.projectile.pos[0], self.projectile.pos[1]))*m.sin(theta)
+
+            # compute new acceleration
+            self.projectile.acc[0] = (self.projectile.grav[0]/self.projectile.mass) + (self.projectile.drag[0]/self.projectile.mass)
+            self.projectile.acc[1] = (self.projectile.grav[1]/self.projectile.mass) + (self.projectile.drag[1]/self.projectile.mass)
+            
+            # update velocity
+            self.projectile.vel[0] = self.projectile.vel[0] + (self.projectile.acc[0]/(1/self.dT))
+            self.projectile.vel[1] = self.projectile.vel[1] + (self.projectile.acc[1]/(1/self.dT))
+            
+            # update position
+            self.projectile.pos[0] = self.projectile.pos[0] + (self.projectile.vel[0]/(1/self.dT))
+            self.projectile.pos[1] = self.projectile.pos[1] + (self.projectile.vel[1]/(1/self.dT))
 
             # record position
             line = []
-            line.extend((self.time, self.projectile.pos[0], self.projectile.pos[1], absolute(self.projectile.pos[0], self.projectile.pos[1])-CONST_R, self.projectile.vel[0], self.projectile.vel[1], absolute(self.projectile.vel[0], self.projectile.vel[1]), self.projectile.acc[0], self.projectile.acc[1], absolute(self.projectile.acc[0], self.projectile.acc[1]), absolute(self.projectile.drag[0], self.projectile.drag[1])))
+            line.extend((self.time, self.projectile.pos[0], self.projectile.pos[1], absolute(self.projectile.pos[0], self.projectile.pos[1])-CONST_R, absolute(self.projectile.vel[0], self.projectile.vel[1]), absolute(self.projectile.acc[0], self.projectile.acc[1]), absolute(self.projectile.drag[0], self.projectile.drag[1])))
             self.projectile.write(line)
-        
-            # update position
-            self.projectile.pos[0] = self.projectile.pos[0] + (self.projectile.vel[0]/(1/CONST_DT))
-            self.projectile.pos[1] = self.projectile.pos[1] + (self.projectile.vel[1]/(1/CONST_DT))
-
-            # update velocity
-            self.projectile.vel[0] = self.projectile.vel[0] + (self.projectile.acc[0]/(1/CONST_DT))
-            self.projectile.vel[1] = self.projectile.vel[1] + (self.projectile.acc[1]/(1/CONST_DT))
-
-            # find drag force
-            if self.projectile.vel[0] >= 0:
-                a = -1
-            else:
-                a = 1
-            
-            if self.projectile.vel[1] >= 0:
-                b = -1
-            else:
-                b = 1
-
-            self.projectile.drag[0] = a*drag(self.projectile.vel[0], absolute(self.projectile.vel[0], self.projectile.vel[1]), absolute(self.projectile.pos[0], self.projectile.pos[1]))
-            self.projectile.drag[1] = b*drag(self.projectile.vel[1], absolute(self.projectile.vel[0], self.projectile.vel[1]), absolute(self.projectile.pos[0], self.projectile.pos[1]))
-
-            # find gravity force
-            gravForceX = -1*bodyForceGravComponent(absolute(self.projectile.pos[0], self.projectile.pos[1]), self.projectile.pos[0])
-            gravForceY = -1*bodyForceGravComponent(absolute(self.projectile.pos[0], self.projectile.pos[1]), self.projectile.pos[1])
-
-            # compute new acceleration
-            self.projectile.acc[0] = ((gravForceX)/CONST_M) + ((self.projectile.drag[0])/CONST_M)
-            self.projectile.acc[1] = ((gravForceY)/CONST_M) + ((self.projectile.drag[1])/CONST_M)
 
             # add dT to time
             self.time = self.time + self.dT
 
+            # collision detection of projectile and planet
             if absolute(self.projectile.pos[0], self.projectile.pos[1]) <= CONST_R:
-                self.time = CONST_TL + self.dT
+                self.time = CONST_TL + self.dT # sets time to timelimit to force simulation loop to end
                 print("\nProjectile Reached Surface")
-        stop = t.perf_counter()
-        print("\nSimulation Finished Running, Time Elapsed:", "{:.3f}".format(stop-start), "seconds")
+        stop = t.perf_counter() # performace calculation end
+        print("\nSimulation Finished Running, Time Elapsed:", dt.timedelta(seconds=int((stop-start))), "(", (stop-start),"seconds")
