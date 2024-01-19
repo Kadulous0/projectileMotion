@@ -13,11 +13,11 @@
 from functions import *
 
 #'''
-capsule = Projectile(ap=160000, pe=160000)
+capsule = Projectile(ap=418000, pe=25000)
 sim = Simulation(projectile=capsule, dT=CONST_DT, tLMax=CONST_TL, isDrag=True)
 sim.run()
 #'''
-drawTrajectoryPlot("figure", 4096, "inferno", (57/255, 116/255, 212/255), 160000)
+drawTrajectoryPlot("figure", 4096, "inferno", (57/255, 116/255, 212/255), 450000)
 drawPlot("altitude", "Absolute Altitude", "meters", "black")
 drawPlot("velocity", "Absolute Velocity", "m/s", "black")
 drawPlot("acceleration", "Absolute Acceleration", "m/s^2", "black")

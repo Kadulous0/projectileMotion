@@ -25,5 +25,5 @@ CONST_L = 3.91 #m
 CONST_A = m.pi*CONST_L**2 #m**2
 
 # SIMULATION PARAMETERS
-CONST_DT = 1/60 #seconds (smaller number = more accurate + slower)
-CONST_TL = 86400 #seconds (avoids infinite runtimes, 90 minutes suffices for a low perigee (25km))
+CONST_DT = 1/20 #seconds (smaller number = more accurate + slower)
+CONST_TL = 7200 #seconds (avoids infinite runtimes, 90 minutes usually suffices for a low perigee (< ~50km))
