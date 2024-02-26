@@ -22,7 +22,7 @@ CONST_MU = CONST_G * CONST_MB
 # PROJECTILE PARAMETERS (based off of Saturn V command module)
 CONST_M = 5560 #kg
 CONST_L = 3.91 #m
-CONST_A = m.pi*CONST_L**2 #m**2
+CONST_A = m.pi*(CONST_L/2)**2 #m**2
 
 # SIMULATION PARAMETERS
 CONST_DT = 1/20 #seconds (smaller number = more accurate + slower)
